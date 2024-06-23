@@ -41,10 +41,14 @@ func main() {
 }
 
 func getProjects(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.PathValue("id")
+	// tenantID := r.PathValue("id")
 	var projects []Project
 
-	db.Debug().Where("projects.tenant_id = ?", tenantID).Find(&projects)
+	// db.Debug().Where("projects.tenant_id = ?", tenantID).Find(&projects)
+
+	// WHERE句を付けないと全てのプロジェクトが取得される
+	db.Debug().Find(&projects)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(projects)
 }
