@@ -1,0 +1,10 @@
+CREATE TABLE tenants (
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE projects (
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id)
+);
