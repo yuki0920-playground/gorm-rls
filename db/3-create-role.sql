@@ -1,0 +1,4 @@
+CREATE ROLE tenant_user WITH LOGIN PASSWORD 'password';
+
+GRANT USAGE ON SCHEMA public TO tenant_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO tenant_user;

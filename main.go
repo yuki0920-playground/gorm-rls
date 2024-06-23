@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -16,7 +17,8 @@ var db *gorm.DB
 
 func main() {
 	dsn := "host=" + os.Getenv("DB_HOST") +
-		" user=" + os.Getenv("DB_USER") +
+		// " user=" + os.Getenv("DB_USER") +
+		" user=tenant_user" +
 		" password=" + os.Getenv("DB_PASSWORD") +
 		" dbname=" + os.Getenv("DB_NAME") +
 		" port=" + os.Getenv("DB_PORT") +
@@ -29,6 +31,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect database: %v", err)
 	}
+
+	//
+	db.Exec(fmt.Sprintf("SET app.tenant_id = '%s'", "tenant1"))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /tenants/{id}/projects", getProjects)
