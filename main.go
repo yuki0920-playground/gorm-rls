@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -32,17 +33,31 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
-	//
-	db.Exec(fmt.Sprintf("SET app.tenant_id = '%s'", "tenant1"))
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /tenants/{id}/projects", getProjects)
-
+	http.Handle("GET /tenants/{tenant_id}/projects", setTenantMiddleware(http.HandlerFunc(getProjects)))
 	slog.Info("Server is running on port 8080")
-	err = http.ListenAndServe(":8080", mux)
+	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		slog.Error("Failed to start server: %v", err)
 	}
+}
+
+func setTenantMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// NOTE: 本来的には認証後にcontextにtenantIDを設定し、その値を実行時パラメータに設定する
+		tenantID := r.PathValue("tenant_id")
+		if tenantID == "" {
+			http.Error(w, "Tenant ID is required", http.StatusBadRequest)
+			return
+		}
+
+		// テナントIDを設定
+		db.Exec(fmt.Sprintf("SET app.tenant_id = '%s'", tenantID))
+
+		next.ServeHTTP(w, r)
+
+		// リクエストが終了したらクリア
+		db.Exec("RESET app.tenant_id")
+	})
 }
 
 func getProjects(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +65,9 @@ func getProjects(w http.ResponseWriter, r *http.Request) {
 	var projects []Project
 
 	// db.Debug().Where("projects.tenant_id = ?", tenantID).Find(&projects)
+
+	// 同時にリクエストを受け付けても問題ないか確認するために30秒待つ
+	time.Sleep(30 * time.Second)
 
 	// WHERE句を付けないと全てのプロジェクトが取得される
 	db.Debug().Find(&projects)
