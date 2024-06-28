@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,8 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
+	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -18,6 +19,8 @@ import (
 var db *gorm.DB
 
 func main() {
+	fmt.Println("main is called")
+
 	dsn := "host=" + os.Getenv("DB_HOST") +
 		// " user=" + os.Getenv("DB_USER") +
 		" user=tenant_user" +
@@ -26,12 +29,10 @@ func main() {
 		" port=" + os.Getenv("DB_PORT") +
 		" sslmode=disable"
 
-	sqlDB, err := sql.Open("pgx", dsn)
-	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
+	connector := &connector{dsn: dsn, d: &stdlib.Driver{}}
+	sqlDB := sql.OpenDB(connector)
 
-	}
-
+	var err error
 	db, err = gorm.Open(postgres.New(postgres.Config{
 		Conn: sqlDB,
 	}), &gorm.Config{
@@ -49,25 +50,6 @@ func main() {
 	}
 }
 
-func setTenantMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// NOTE: 本来的には認証後にcontextにtenantIDを設定し、その値を実行時パラメータに設定する
-		tenantID := r.PathValue("tenant_id")
-		if tenantID == "" {
-			http.Error(w, "Tenant ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// テナントIDを設定
-		db.Exec(fmt.Sprintf("SET app.tenant_id = '%s'", tenantID))
-
-		next.ServeHTTP(w, r)
-
-		// リクエストが終了したらクリア
-		db.Exec("RESET app.tenant_id")
-	})
-}
-
 func getProjects(w http.ResponseWriter, r *http.Request) {
 	// tenantID := r.PathValue("id")
 	var projects []Project
@@ -75,13 +57,32 @@ func getProjects(w http.ResponseWriter, r *http.Request) {
 	// db.Debug().Where("projects.tenant_id = ?", tenantID).Find(&projects)
 
 	// 同時にリクエストを受け付けても問題ないか確認するために30秒待つ
-	time.Sleep(30 * time.Second)
+	// time.Sleep(30 * time.Second)
+
+	// コネクション作成、取得時にcontextからtenant_idを取得し実行時パラメータにセットするためにcontextを渡す
+	db = db.WithContext(r.Context())
 
 	// WHERE句を付けないと全てのプロジェクトが取得される
 	db.Debug().Find(&projects)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(projects)
+}
+
+func setTenantMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tenantID := r.PathValue("tenant_id")
+		if tenantID == "" {
+			http.Error(w, "Tenant ID is required", http.StatusBadRequest)
+			return
+		}
+
+		// NOTE: 認証後にcontextにtenant_idをセットする
+		ctx := context.WithValue(r.Context(), "tenant_id", tenantID)
+		r = r.WithContext(ctx)
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 type Tenant struct {
