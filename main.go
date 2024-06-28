@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -25,8 +26,15 @@ func main() {
 		" port=" + os.Getenv("DB_PORT") +
 		" sslmode=disable"
 
-	var err error
-	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+	sqlDB, err := sql.Open("pgx", dsn)
+	if err != nil {
+		log.Fatalf("failed to open database: %v", err)
+
+	}
+
+	db, err = gorm.Open(postgres.New(postgres.Config{
+		Conn: sqlDB,
+	}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 	if err != nil {
