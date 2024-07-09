@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
@@ -43,6 +44,7 @@ func main() {
 	}
 
 	http.Handle("GET /tenants/{tenant_id}/projects", setTenantMiddleware(http.HandlerFunc(getProjects)))
+	http.Handle("GET /test/{tenant_id}/projects", setTenantMiddleware(http.HandlerFunc(testGetProjects)))
 	slog.Info("Server is running on port 8080")
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
@@ -60,11 +62,22 @@ func getProjects(w http.ResponseWriter, r *http.Request) {
 	// time.Sleep(30 * time.Second)
 
 	// コネクション作成、取得時にcontextからtenant_idを取得し実行時パラメータにセットするためにcontextを渡す
-	db = db.WithContext(r.Context())
+	newDB := db.WithContext(r.Context())
 
 	// WHERE句を付けないと全てのプロジェクトが取得される
-	db.Debug().Find(&projects)
+	newDB.Debug().Find(&projects)
 
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(projects)
+}
+
+func testGetProjects(w http.ResponseWriter, r *http.Request) {
+	var projects []Project
+	newDB := db.WithContext(r.Context())
+
+	time.Sleep(10 * time.Second)
+
+	newDB.Debug().Find(&projects)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(projects)
 }
