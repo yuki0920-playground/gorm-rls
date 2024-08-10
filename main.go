@@ -43,6 +43,8 @@ func main() {
 	}
 
 	http.Handle("GET /tenants/{tenant_id}/projects", setTenantMiddleware(http.HandlerFunc(getProjects)))
+	http.Handle("GET /tenants/{tenant_id}/project_tags/{id}", setTenantMiddleware(http.HandlerFunc(getProjectTag)))
+
 	slog.Info("Server is running on port 8080")
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
@@ -51,22 +53,24 @@ func main() {
 }
 
 func getProjects(w http.ResponseWriter, r *http.Request) {
-	// tenantID := r.PathValue("id")
 	var projects []Project
 
-	// db.Debug().Where("projects.tenant_id = ?", tenantID).Find(&projects)
-
-	// 同時にリクエストを受け付けても問題ないか確認するために30秒待つ
-	// time.Sleep(30 * time.Second)
-
 	// コネクション作成、取得時にcontextからtenant_idを取得し実行時パラメータにセットするためにcontextを渡す
-	db = db.WithContext(r.Context())
-
-	// WHERE句を付けないと全てのプロジェクトが取得される
-	db.Debug().Find(&projects)
+	// WHERE句を付けななくても、contextからtenant_idを取得して実行時パラメータにセットするため、organization_idによる絞り込みが行われる
+	db.Debug().WithContext(r.Context()).Find(&projects)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(projects)
+}
+
+func getProjectTag(w http.ResponseWriter, r *http.Request) {
+	var tag ProjectTag
+
+	// PreloadでRLSポリシーを適用しているテーブルを取得する場合は、WithContextでcontextを渡す必要がある
+	db.Debug().WithContext(r.Context()).Preload("Project").Find(&tag, "id = ?", r.PathValue("id"))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tag)
 }
 
 func setTenantMiddleware(next http.Handler) http.Handler {
@@ -86,14 +90,19 @@ func setTenantMiddleware(next http.Handler) http.Handler {
 }
 
 type Tenant struct {
-	ID       string    `json:"id"`
-	Name     string    `json:"name"`
-	Projects []Project `json:"projects" gorm:"foreignKey:TenantID"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type Project struct {
 	TenantID string `json:"tenant_id"`
-	Tenant   Tenant `json:"tenant" gorm:"foreignKey:TenantID"`
+	Tenant   Tenant `json:"tenant" gorm:"foreignKey:TenantID;references:ID"`
 	ID       string `json:"id"`
 	Name     string `json:"name"`
+}
+
+type ProjectTag struct {
+	ProjectID string  `json:"project_id"`
+	Project   Project `json:"project" gorm:"foreignKey:ProjectID;references:ID"`
+	ID        string  `json:"id"`
 }
