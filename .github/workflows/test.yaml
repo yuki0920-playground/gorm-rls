@@ -18,5 +18,7 @@ jobs:
           echo "ref^  {{ github.ref }}^"
           echo "sha {{ github.sha }}"
           echo "sha^  {{ github.sha }}^"
-      - name: git diff
+      - name: git diff before to sha
         run: git diff --name-only ${{ github.event.before }} ${{ github.sha }}
+      - name: git diff sha^
+        run: git diff --name-only ${{ github.sha }}^ ${{ github.sha }}
